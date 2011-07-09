@@ -177,10 +177,12 @@ int main(int argc, char* argv[])
 		}
 		return 0;
 	}
-
-	struct blocklist *blocks = getblocks((char *)argv[1]);
+	//in the original process
+	char pid[MEMBLOCK];
+	sprintf(pid, "%d", forker); 
+	struct blocklist *blocks = getblocks(pid);
 	if (blocks)
-		getblockstatus((char *) argv[1], blocks);
+		getblockstatus(pid, blocks);
 	cleanblocklist(blocks);
 	return 1;
 }
