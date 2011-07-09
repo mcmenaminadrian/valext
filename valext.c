@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
 #include <regex.h>
@@ -9,7 +10,7 @@
 #define MEMBLOCK 512
 
 struct blocklist {
-	long address;
+	uint64_t address;
 	struct blocklist *nextblock;
 };
 
@@ -114,15 +115,12 @@ int getblockstatus(char* pid, struct blocklist *blocks)
 		goto clean;
 	}
 	while (blocks) {
-		long result = 0;
-		long top = (((blocks->address) >> 32) & 0xffff) << 6;
-		long bottom = (blocks->address & 0xFFFF) << 6;
-		int llres = _llseek(fd, top, bottom, result, SEEK_CUR);
-		if (llres ! = 0) {
+		int64_t lres = lseek(fd, blocks->address << 6, SEEK_CUR);
+		if (lres == -1) {
 			printf("Could not seek to %d\n", blocks->address);
 			goto clean;
 		}
-		printf("Got to %ld\n", result);
+		printf("Got to %ld\n", lres);
 		blocks = blocks->nextblock;
 		blockcnt++;
 	}
@@ -139,8 +137,8 @@ int main(int argc, char* argv[])
 		return 0; /* must supply a pid */
 	struct blocklist *blocks = getblocks((char *)argv[1]);
 	while (blocks) {
-		printf("Block at page %d\n", blocks->address);
-		getblockstatus(((char *) argv[1], blocks);
+		printf("Block at page %ld\n", blocks->address);
+		getblockstatus((char *) argv[1], blocks);
 		blocks= blocks->nextblock;
 	}
 	cleanblocklist(blocks);
