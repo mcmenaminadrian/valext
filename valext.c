@@ -99,7 +99,10 @@ int getblockstatus(char* pid, struct blocklist *blocks)
 {
 	FILE *ret;
 	int fd;
-	int blockcnt = 0;
+	int presentcnt = 0;
+	int swappedcnt = 0;
+	int notpresentcnt = 0;
+	char *buf;
 	/* open /proc/pid/pagemap */
 	char st1[MEMBLOCK] = "/proc/";
 	strcat(st1, pid);
@@ -115,6 +118,11 @@ int getblockstatus(char* pid, struct blocklist *blocks)
 		goto clean;
 	}
 	
+	buf = malloc(8);
+	if (!buf) {
+		printf("Could not allocate memory\n");
+		goto clean;
+	}
 	while (blocks) {
 		uint64_t swapped = 0x4000000000000000;
 		uint64_t present = 0x8000000000000000;
@@ -122,33 +130,31 @@ int getblockstatus(char* pid, struct blocklist *blocks)
 		int64_t lres = lseek(fd, blocks->address << 3, SEEK_SET);
 		if (lres == -1) {
 			printf("Could not seek to %llX\n", blocks->address);
-			goto clean;
+			goto freebuf;
 		}
 		char *buf = malloc(8);
 		read(fd, buf, 8);
 		uint64_t *pgstatus = (uint64_t *)buf;
-		printf("Status is %llx\n", *pgstatus);
 
 		if (*pgstatus & swapped) {
-			 printf("Page %llu is swapped out\n", blocks->address);
+			swappedcnt++;
 		} else if (*pgstatus & present) {
-			uint64_t pgframe = *pgstatus & pfnmask;
-			printf("Page %llX is present at PFN %llX\n",
-				blocks->address, pgframe);
+			presentcnt++;
 		} else {
-			printf("Not sure what status of page %llX is.\n",
-				blocks->address);
+			//page is mapped but unused
+			notpresentcnt++;		
 		}
-		printf("Got to %lu\n", lres);
 		blocks = blocks->nextblock;
-		blockcnt++;
-		free(buf);
 	}
+	printf("%u pages present, %u pages swapped\n",
+		presentcnt, swappedcnt);
 
+freebuf:
+	free(buf);
 clean:
 	fclose(ret);
 ret:
-	return blockcnt;
+	return presentcnt;
 }
 
 int main(int argc, char* argv[])
@@ -156,10 +162,8 @@ int main(int argc, char* argv[])
 	if (argc < 2)
 		return 0; /* must supply a pid */
 	struct blocklist *blocks = getblocks((char *)argv[1]);
-	if (blocks){
-		printf("Block at page %ld\n", blocks->address);
+	if (blocks)
 		getblockstatus((char *) argv[1], blocks);
-	}
 	cleanblocklist(blocks);
 	return 1;
 }
