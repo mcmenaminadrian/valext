@@ -30,10 +30,10 @@ struct blocklist* getnextblock(struct blocklist** lastblock,
 	struct blocklist** header, char* buf)
 {
 	int match;
-	int startaddr;
-	int endaddr;
+	uint64_t startaddr;
+	uint64_t endaddr;
 	struct blocklist* block;
-	int i;
+	uint64_t i;
 	const char* pattern;
 	regex_t reg;
 	regmatch_t addresses[3];
