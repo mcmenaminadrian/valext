@@ -114,8 +114,9 @@ int getblockstatus(char* pid, struct blocklist *blocks)
 		printf("Could not get file descriptor for %s\n", st1);
 		goto clean;
 	}
+	
 	while (blocks) {
-		int64_t lres = lseek(fd, blocks->address << 3, SEEK_CUR);
+		int64_t lres = lseek(fd, blocks->address << 3, SEEK_SET);
 		if (lres == -1) {
 			printf("Could not seek to %d\n", blocks->address);
 			goto clean;
