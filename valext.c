@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <regex.h>
 #include <unistd.h>
+#include <sys/ptrace.h>
 
 #define PAGESHIFT 12
 #define MEMBLOCK 512
@@ -158,8 +159,25 @@ ret:
 
 int main(int argc, char* argv[])
 {
+	int i;
 	if (argc < 2)
-		return 0; /* must supply a pid */
+		return 0; /* must supply a file to execute */
+	pid_t forker = fork();
+	if (forker == 0) {
+		//in the child process
+		if (argc > 2) {
+			char* childargs[argc - 2];
+			for (i = 2; i < argc; i++) 
+				childargs[i - 1] = argv[i];	
+			ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+			execvp(childargs[0], childargs);
+		} else {
+			ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+			execvp(argv[1], NULL);
+		}
+		return 0;
+	}
+
 	struct blocklist *blocks = getblocks((char *)argv[1]);
 	if (blocks)
 		getblockstatus((char *) argv[1], blocks);
