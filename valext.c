@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <regex.h>
+#include <unistd.h>
 
 #define PAGESHIFT 12
 #define MEMBLOCK 512
@@ -63,33 +64,73 @@ struct blocklist* getnextblock(struct blocklist** lastblock,
 
 struct blocklist* getblocks(char* pid)
 {
+	FILE *ret;
+	struct blocklist *head = NULL;
+	struct blocklist *lastblock = NULL;
 	/* open /proc/pid/maps */
 	char st1[MEMBLOCK] = "/proc/";
 	strcat(st1, pid);
 	strcat(st1, "/maps");
 	printf("%s\n", st1);
-	struct blocklist *head = NULL;
-	struct blocklist *lastblock = NULL;
 	
-	FILE *ret = fopen(st1, "r");
+	ret = fopen(st1, "r");
 	if (ret == NULL) {
 		printf("Could not open %s\n", st1);
 		goto ret;
 	}
-	char buf[512];
+	char buf[MEMBLOCK];
 	int i = 0;
 	while (!feof(ret)){
 		fgets(buf, MEMBLOCK, ret);
 		lastblock = getnextblock(&lastblock, &head, buf);
 		if (!lastblock)
 			goto close;
-		printf("Line %d is:%s\n", i, buf);
 		i++;
 	}
 close:
 	fclose(ret); 
 ret:
 	return head;
+}
+
+/* now read the status of each page */
+int getblockstatus(char* pid, struct blocklist *blocks)
+{
+	FILE *ret;
+	int fd;
+	int blockcnt = 0;
+	/* open /proc/pid/pagemap */
+	char st1[MEMBLOCK] = "/proc/";
+	strcat(st1, pid);
+	strcat(st1, "/pagemap");
+	ret = fopen(st1, "r");
+	if (ret == NULL) {
+		printf("Could not open %s\n", st1);
+		goto ret;
+	}
+	fd = fileno(ret);
+	if (fd == -1) {
+		printf("Could not get file descriptor for %s\n", st1);
+		goto clean;
+	}
+	while (blocks) {
+		long result = 0;
+		long top = (((blocks->address) >> 32) & 0xffff) << 6;
+		long bottom = (blocks->address & 0xFFFF) << 6;
+		int llres = _llseek(fd, top, bottom, result, SEEK_CUR);
+		if (llres ! = 0) {
+			printf("Could not seek to %d\n", blocks->address);
+			goto clean;
+		}
+		printf("Got to %ld\n", result);
+		blocks = blocks->nextblock;
+		blockcnt++;
+	}
+
+clean:
+	fclose(ret);
+ret:
+	return blockcnt;
 }
 
 int main(int argc, char* argv[])
@@ -99,6 +140,7 @@ int main(int argc, char* argv[])
 	struct blocklist *blocks = getblocks((char *)argv[1]);
 	while (blocks) {
 		printf("Block at page %d\n", blocks->address);
+		getblockstatus(((char *) argv[1], blocks);
 		blocks= blocks->nextblock;
 	}
 	cleanblocklist(blocks);
