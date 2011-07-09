@@ -72,7 +72,6 @@ struct blocklist* getblocks(char* pid)
 	char st1[MEMBLOCK] = "/proc/";
 	strcat(st1, pid);
 	strcat(st1, "/maps");
-	printf("%s\n", st1);
 	
 	ret = fopen(st1, "r");
 	if (ret == NULL) {
