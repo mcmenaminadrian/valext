@@ -1,0 +1,4 @@
+Read information about a running process from the /proc filesystem
+Licenced under version 2 of the GPL (or at your discretion any later
+version).
+Copyright (c) Adrian McMenamin, 2011
