@@ -116,14 +116,33 @@ int getblockstatus(char* pid, struct blocklist *blocks)
 	}
 	
 	while (blocks) {
+		uint64_t swapped = 0x4000000000000000;
+		uint64_t present = 0x8000000000000000;
+		uint64_t pfnmask = 0x007fffffffffffff;
 		int64_t lres = lseek(fd, blocks->address << 3, SEEK_SET);
 		if (lres == -1) {
-			printf("Could not seek to %d\n", blocks->address);
+			printf("Could not seek to %lu\n", blocks->address);
 			goto clean;
 		}
-		printf("Got to %ld\n", lres);
+		char *buf = malloc(8);
+		read(fd, buf, 8);
+		uint64_t *pgstatus = (uint64_t *)buf;
+		printf("Status is %llx\n", *pgstatus);
+
+		if (*pgstatus & swapped) {
+			 printf("Page %llu is swapped out\n", blocks->address);
+		} else if (*pgstatus & present) {
+			uint64_t pgframe = *pgstatus & pfnmask;
+			printf("Page %llu is present at PFN %ld\n",
+				blocks->address, pgframe);
+		} else {
+			printf("Not sure what status of page %ld is.\n",
+				blocks->address);
+		}
+		printf("Got to %lu\n", lres);
 		blocks = blocks->nextblock;
 		blockcnt++;
+		free(buf);
 	}
 
 clean:
@@ -137,10 +156,9 @@ int main(int argc, char* argv[])
 	if (argc < 2)
 		return 0; /* must supply a pid */
 	struct blocklist *blocks = getblocks((char *)argv[1]);
-	while (blocks) {
+	if (blocks){
 		printf("Block at page %ld\n", blocks->address);
 		getblockstatus((char *) argv[1], blocks);
-		blocks= blocks->nextblock;
 	}
 	cleanblocklist(blocks);
 	return 1;
