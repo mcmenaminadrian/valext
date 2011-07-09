@@ -115,7 +115,7 @@ int getblockstatus(char* pid, struct blocklist *blocks)
 		goto clean;
 	}
 	while (blocks) {
-		int64_t lres = lseek(fd, blocks->address << 6, SEEK_CUR);
+		int64_t lres = lseek(fd, blocks->address << 3, SEEK_CUR);
 		if (lres == -1) {
 			printf("Could not seek to %d\n", blocks->address);
 			goto clean;
