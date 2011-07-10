@@ -15,6 +15,12 @@ struct blocklist {
 	struct blocklist *nextblock;
 };
 
+struct workingsetstats {
+	uint64_t secs;
+	double present;
+	double swapped;
+};
+
 /* recursively free the list */
 void cleanblocklist(struct blocklist *bl)
 {
@@ -64,6 +70,7 @@ struct blocklist* getnextblock(struct blocklist** lastblock,
 	return *lastblock;
 } 
 
+/* query /proc filesystem */
 struct blocklist* getblocks(char* pid)
 {
 	FILE *ret;
@@ -157,6 +164,53 @@ ret:
 	return presentcnt;
 }
 
+/* run the child */
+struct workingsetstats *getWSS(pid_t forked)
+{
+	struct workingsetstats *wss = NULL;
+	int i;
+	int killrep;
+	int waitrep;
+	int status;
+	/*create a string representation of pid */
+	char pid[MEMBLOCK];
+	sprintf(pid, "%llu", forked);
+	/* zero out starting stats */
+	wss = malloc(sizeof(struct workingsetstats));
+	if (!wss)
+		goto ret;
+	wss->secs = 0;
+	wss->present = 0;
+	wss->swapped = 0;
+	/* loop while signalling child */
+	for (i = 0; i < 0x1000; i++)
+	{
+		//dummy signal
+		killrep = kill(forked, SIG_DFL);
+		if (killrep != 0) {
+			printf("Run %d: Could not signal child process %s\n",
+				i, pid);
+			goto ret;
+		}
+		waitrep = wait(forked, &status, 0);
+		if (status == WIFCONTINUED) {
+			printf("Continued\n");
+			continue;
+		}
+		
+		struct blocklist *blocks = getblocks(pid);
+		if (blocks)
+			getblockstatus(pid, blocks);
+		cleanblocklist(blocks);
+		killrep = kill(forked, SIGCONT);
+		if (killrep != 0) {
+			printf("Run %d: Could not continue child process %s\n",
+				i, pid);
+			goto ret;
+	}
+ret:
+	return wss;
+
 int main(int argc, char* argv[])
 {
 	int i;
@@ -178,6 +232,11 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 	//in the original process
+	if (forker < 0) {
+		printf("Could not get %s to run\n", argv[1]);
+		return 0;
+	}
+	struct workingsetstats procWSS = *getWSS(forker);	
 	char pid[MEMBLOCK];
 	sprintf(pid, "%d", forker); 
 	struct blocklist *blocks = getblocks(pid);
