@@ -8,6 +8,7 @@
 #include <sys/ptrace.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <time.h>
 
 #define PAGESHIFT 12
 #define MEMBLOCK 512
@@ -15,12 +16,6 @@
 struct blocklist {
 	uint64_t address;
 	struct blocklist *nextblock;
-};
-
-struct workingsetstats {
-	uint64_t secs;
-	double present;
-	double swapped;
 };
 
 /* recursively free the list */
@@ -104,7 +99,7 @@ ret:
 }
 
 /* now read the status of each page */
-int getblockstatus(char* pid, struct blocklist *blocks)
+int getblockstatus(char* pid, struct blocklist *blocks, FILE* xmlout, int cnt)
 {
 	FILE *ret;
 	int fd;
@@ -155,8 +150,11 @@ int getblockstatus(char* pid, struct blocklist *blocks)
 		}
 		blocks = blocks->nextblock;
 	}
-	printf("%u pages present, %u pages swapped\n",
-		presentcnt, swappedcnt);
+	char traceline[MEMBLOCK];
+	sprintf(traceline,
+		"<trace steps=\"%llu\" present=\"%llu\" swapped=\"%llu\"/>\n",
+		count, presentcnt, swappedcnt);
+	fputs(traceline, xmlout);
 
 freebuf:
 	free(buf);
@@ -167,25 +165,18 @@ ret:
 }
 
 /* run the child */
-struct workingsetstats *getWSS(pid_t forked)
+void getWSS(pid_t forked, FILE* xmlout)
 {
 	struct workingsetstats *wss = NULL;
-	int i;
+	int i = 0;
 	int killrep;
 	long ptracerep;
 	int status;
 	/*create a string representation of pid */
 	char pid[MEMBLOCK];
-	sprintf(pid, "%u", forked); printf("PID is %d and %s\n", forked, pid);
-	/* zero out starting stats */
-	wss = malloc(sizeof(struct workingsetstats));
-	if (!wss)
-		goto ret;
-	wss->secs = 0;
-	wss->present = 0;
-	wss->swapped = 0;
+	sprintf(pid, "%u", forked);
 	/* loop while signalling child */
-	for (i = 0; i < 50000; i++)
+	while(1)
 	{
 		wait(&status);
 		ptrace(PTRACE_SINGLESTEP, forked, 0, 0);
@@ -193,7 +184,7 @@ struct workingsetstats *getWSS(pid_t forked)
 			break;
 		struct blocklist *blocks = getblocks(pid);
 		if (blocks)
-			getblockstatus(pid, blocks);
+			getblockstatus(pid, blocks, xmlout, i++);
 		cleanblocklist(blocks);
 	}
 ret:
@@ -203,6 +194,7 @@ ret:
 int main(int argc, char* argv[])
 {
 	int i;
+	FILE* outXML;
 	if (argc < 2)
 		return 0; /* must supply a file to execute */
 	pid_t forker = fork();
@@ -225,8 +217,26 @@ int main(int argc, char* argv[])
 		printf("Could not get %s to run\n", argv[1]);
 		return 0;
 	}
-	struct workingsetstats *procWSS = getWSS(forker);
-	free(procWSS);
+	/* Open XML file */
+	char filename[MEMBLOCK];
+	sprintf(filename, "XMLtrace%d_%d.xml", forker, rand(void));
+	outXML = fopen(filename, "a");
+	if (!outXML) {
+		printf("Could not open %s\n", filename);
+		return 0;
+	}
+	fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n", outXML);
+	fputs("<!DOCTYPE ptracexml [\n", outXML);
+	fputs("<!ELEMENT ptracexml (trace)*>\n", outXML);
+	fputs("<!ELEMENT trace EMPTY>\n", outXML);
+	fputs("<!ATTLIST trace step CDATA #REQUIRED>\n", outXML);
+	fputs("<!ATTLIST trace present CDATA #REQUIRED>\n", outXML);
+	fputs("<!ATTLIST trace swapped CDATA #REQUIRED>\n", outXML);
+	fputs("]>\n", outXML);
+	fputs("<ptracexml>\n", outXML);
+	getWSS(forker, outXML);
+	fputs("</ptracexml>\n", outXML);
+	fclose(outXML);
 	return 1;
 }
 	
