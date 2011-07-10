@@ -153,7 +153,7 @@ int getblockstatus(char* pid, struct blocklist *blocks, FILE* xmlout, int cnt)
 	char traceline[MEMBLOCK];
 	sprintf(traceline,
 		"<trace steps=\"%llu\" present=\"%llu\" swapped=\"%llu\"/>\n",
-		count, presentcnt, swappedcnt);
+		cnt, presentcnt, swappedcnt);
 	fputs(traceline, xmlout);
 
 freebuf:
@@ -169,8 +169,6 @@ void getWSS(pid_t forked, FILE* xmlout)
 {
 	struct workingsetstats *wss = NULL;
 	int i = 0;
-	int killrep;
-	long ptracerep;
 	int status;
 	/*create a string representation of pid */
 	char pid[MEMBLOCK];
@@ -187,8 +185,6 @@ void getWSS(pid_t forked, FILE* xmlout)
 			getblockstatus(pid, blocks, xmlout, i++);
 		cleanblocklist(blocks);
 	}
-ret:
-	return wss;
 }
 
 int main(int argc, char* argv[])
@@ -219,7 +215,7 @@ int main(int argc, char* argv[])
 	}
 	/* Open XML file */
 	char filename[MEMBLOCK];
-	sprintf(filename, "XMLtrace%d_%d.xml", forker, rand(void));
+	sprintf(filename, "XMLtrace%d_%d.xml", forker, rand());
 	outXML = fopen(filename, "a");
 	if (!outXML) {
 		printf("Could not open %s\n", filename);
