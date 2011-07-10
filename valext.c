@@ -173,10 +173,11 @@ struct workingsetstats *getWSS(pid_t forked)
 	int i;
 	int killrep;
 	int waitrep;
+	long ptracerep;
 	int status;
 	/*create a string representation of pid */
 	char pid[MEMBLOCK];
-	sprintf(pid, "%llu", forked);
+	sprintf(pid, "%u", forked); printf("PID is %d and %s\n", forked, pid);
 	/* zero out starting stats */
 	wss = malloc(sizeof(struct workingsetstats));
 	if (!wss)
@@ -204,8 +205,8 @@ struct workingsetstats *getWSS(pid_t forked)
 		if (blocks)
 			getblockstatus(pid, blocks);
 		cleanblocklist(blocks);
-		killrep = kill(forked, SIGCONT);
-		if (killrep != 0) {
+		ptracerep = ptrace(PTRACE_CONT, forked, NULL, NULL);
+		if (ptracerep != 0) {
 			printf("Run %d: Could not continue child process %s\n",
 				i, pid);
 			goto ret;
