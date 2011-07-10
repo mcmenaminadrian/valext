@@ -172,7 +172,6 @@ struct workingsetstats *getWSS(pid_t forked)
 	struct workingsetstats *wss = NULL;
 	int i;
 	int killrep;
-	int waitrep;
 	long ptracerep;
 	int status;
 	/*create a string representation of pid */
@@ -186,31 +185,16 @@ struct workingsetstats *getWSS(pid_t forked)
 	wss->present = 0;
 	wss->swapped = 0;
 	/* loop while signalling child */
-	for (i = 0; i < 0x1000; i++)
+	for (i = 0; i < 50000; i++)
 	{
-		//dummy signal
-		killrep = kill(forked, SIG_DFL);
-		if (killrep != 0) {
-			printf("Run %d: Could not signal child process %s\n",
-				i, pid);
-			goto ret;
-		}
-		waitrep = waitpid(forked, &status, 0);
-		if (WIFCONTINUED(status)) {
-			printf("Continued\n");
-			continue;
-		}
-		
+		wait(&status);
+		ptrace(PTRACE_SINGLESTEP, forked, 0, 0);
+		if (WIFEXITED(status))
+			break;
 		struct blocklist *blocks = getblocks(pid);
 		if (blocks)
 			getblockstatus(pid, blocks);
 		cleanblocklist(blocks);
-		ptracerep = ptrace(PTRACE_CONT, forked, NULL, NULL);
-		if (ptracerep != 0) {
-			printf("Run %d: Could not continue child process %s\n",
-				i, pid);
-			goto ret;
-		}
 	}
 ret:
 	return wss;
@@ -228,10 +212,10 @@ int main(int argc, char* argv[])
 			char* childargs[argc - 2];
 			for (i = 2; i < argc; i++) 
 				childargs[i - 1] = argv[i];	
-			ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+			ptrace(PTRACE_TRACEME, 0, 0, 0);
 			execvp(childargs[0], childargs);
 		} else {
-			ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+			ptrace(PTRACE_TRACEME, 0, 0, 0);
 			execvp(argv[1], NULL);
 		}
 		return 0;
