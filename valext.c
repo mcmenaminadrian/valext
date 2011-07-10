@@ -136,7 +136,6 @@ int getblockstatus(char* pid, struct blocklist *blocks, FILE* xmlout, int cnt)
 			printf("Could not seek to %llX\n", blocks->address);
 			goto freebuf;
 		}
-		char *buf = malloc(8);
 		read(fd, buf, 8);
 		uint64_t *pgstatus = (uint64_t *)buf;
 
@@ -152,7 +151,7 @@ int getblockstatus(char* pid, struct blocklist *blocks, FILE* xmlout, int cnt)
 	}
 	char traceline[MEMBLOCK];
 	sprintf(traceline,
-		"<trace steps=\"%llu\" present=\"%llu\" swapped=\"%llu\"/>\n",
+		"<trace steps=\"%u\" present=\"%u\" swapped=\"%u\"/>\n",
 		cnt, presentcnt, swappedcnt);
 	fputs(traceline, xmlout);
 
@@ -167,7 +166,6 @@ ret:
 /* run the child */
 void getWSS(pid_t forked, FILE* xmlout)
 {
-	struct workingsetstats *wss = NULL;
 	int i = 0;
 	int status;
 	/*create a string representation of pid */
