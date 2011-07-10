@@ -192,6 +192,7 @@ int main(int argc, char* argv[])
 	if (argc < 2)
 		return 0; /* must supply a file to execute */
 	pid_t forker = fork();
+	srand(time(NULL));
 	if (forker == 0) {
 		//in the child process
 		if (argc > 2) {
