@@ -6,6 +6,8 @@
 #include <regex.h>
 #include <unistd.h>
 #include <sys/ptrace.h>
+#include <signal.h>
+#include <sys/wait.h>
 
 #define PAGESHIFT 12
 #define MEMBLOCK 512
@@ -192,8 +194,8 @@ struct workingsetstats *getWSS(pid_t forked)
 				i, pid);
 			goto ret;
 		}
-		waitrep = wait(forked, &status, 0);
-		if (status == WIFCONTINUED) {
+		waitrep = waitpid(forked, &status, 0);
+		if (WIFCONTINUED(status)) {
 			printf("Continued\n");
 			continue;
 		}
@@ -207,9 +209,11 @@ struct workingsetstats *getWSS(pid_t forked)
 			printf("Run %d: Could not continue child process %s\n",
 				i, pid);
 			goto ret;
+		}
 	}
 ret:
 	return wss;
+}
 
 int main(int argc, char* argv[])
 {
@@ -236,13 +240,8 @@ int main(int argc, char* argv[])
 		printf("Could not get %s to run\n", argv[1]);
 		return 0;
 	}
-	struct workingsetstats procWSS = *getWSS(forker);	
-	char pid[MEMBLOCK];
-	sprintf(pid, "%d", forker); 
-	struct blocklist *blocks = getblocks(pid);
-	if (blocks)
-		getblockstatus(pid, blocks);
-	cleanblocklist(blocks);
+	struct workingsetstats *procWSS = getWSS(forker);
+	free(procWSS);
 	return 1;
 }
 	
