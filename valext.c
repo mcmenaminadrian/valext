@@ -187,20 +187,16 @@ void getWSS(pid_t forked, FILE* xmlout)
 
 int main(int argc, char* argv[])
 {
-	int i;
 	FILE* outXML;
 	if (argc < 2)
 		return 0; /* must supply a file to execute */
-	pid_t forker = fork();
 	srand(time(NULL));
+	pid_t forker = fork();
 	if (forker == 0) {
 		//in the child process
-		if (argc > 2) {
-			char* childargs[argc - 2];
-			for (i = 2; i < argc; i++) 
-				childargs[i - 1] = argv[i];	
+		if (argc == 3) {
 			ptrace(PTRACE_TRACEME, 0, 0, 0);
-			execvp(childargs[0], childargs);
+			execlp(argv[1], argv[2]);
 		} else {
 			ptrace(PTRACE_TRACEME, 0, 0, 0);
 			execvp(argv[1], NULL);
