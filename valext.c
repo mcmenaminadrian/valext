@@ -73,6 +73,8 @@ struct blocklist* getblocks(char* pid)
 	FILE *ret;
 	struct blocklist *head = NULL;
 	struct blocklist *lastblock = NULL;
+	char buf[MEMBLOCK];
+	int i;
 	/* open /proc/pid/maps */
 	char st1[MEMBLOCK] = "/proc/";
 	strcat(st1, pid);
@@ -83,8 +85,7 @@ struct blocklist* getblocks(char* pid)
 		printf("Could not open %s\n", st1);
 		goto ret;
 	}
-	char buf[MEMBLOCK];
-	int i = 0;
+	i = 0;
 	while (!feof(ret)){
 		fgets(buf, MEMBLOCK, ret);
 		lastblock = getnextblock(&lastblock, &head, buf);
@@ -107,6 +108,7 @@ int getblockstatus(char* pid, struct blocklist *blocks, FILE* xmlout, int cnt)
 	int swappedcnt = 0;
 	int notpresentcnt = 0;
 	char *buf;
+	char traceline[MEMBLOCK];
 	/* open /proc/pid/pagemap */
 	char st1[MEMBLOCK] = "/proc/";
 	strcat(st1, pid);
@@ -131,13 +133,14 @@ int getblockstatus(char* pid, struct blocklist *blocks, FILE* xmlout, int cnt)
 		uint64_t swapped = 0x4000000000000000;
 		uint64_t present = 0x8000000000000000;
 		uint64_t pfnmask = 0x007fffffffffffff;
+		uint64_t *pgstatus;
 		int64_t lres = lseek(fd, blocks->address << 3, SEEK_SET);
 		if (lres == -1) {
 			printf("Could not seek to %llX\n", blocks->address);
 			goto freebuf;
 		}
 		read(fd, buf, 8);
-		uint64_t *pgstatus = (uint64_t *)buf;
+		pgstatus = (uint64_t *)buf;
 
 		if (*pgstatus & swapped) {
 			swappedcnt++;
@@ -149,7 +152,6 @@ int getblockstatus(char* pid, struct blocklist *blocks, FILE* xmlout, int cnt)
 		}
 		blocks = blocks->nextblock;
 	}
-	char traceline[MEMBLOCK];
 	sprintf(traceline,
 		"<trace steps=\"%u\" present=\"%u\" swapped=\"%u\"/>\n",
 		cnt, presentcnt, swappedcnt);
@@ -166,8 +168,8 @@ ret:
 /* run the child */
 void getWSS(pid_t forked, FILE* xmlout)
 {
-	int i = 0;
-	int status;
+	int i = 0, status;
+	struct blocklist *blocks;
 	/*create a string representation of pid */
 	char pid[MEMBLOCK];
 	sprintf(pid, "%u", forked);
@@ -178,7 +180,7 @@ void getWSS(pid_t forked, FILE* xmlout)
 		ptrace(PTRACE_SINGLESTEP, forked, 0, 0);
 		if (WIFEXITED(status))
 			break;
-		struct blocklist *blocks = getblocks(pid);
+		blocks = getblocks(pid);
 		if (blocks)
 			getblockstatus(pid, blocks, xmlout, i++);
 		cleanblocklist(blocks);
@@ -188,6 +190,7 @@ void getWSS(pid_t forked, FILE* xmlout)
 int main(int argc, char* argv[])
 {
 	FILE* outXML;
+	char filename[MEMBLOCK];
 	if (argc < 2)
 		return 0; /* must supply a file to execute */
 	srand(time(NULL));
@@ -209,7 +212,6 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 	/* Open XML file */
-	char filename[MEMBLOCK];
 	sprintf(filename, "XMLtrace%d_%d.xml", forker, rand());
 	outXML = fopen(filename, "a");
 	if (!outXML) {
@@ -230,4 +232,4 @@ int main(int argc, char* argv[])
 	fclose(outXML);
 	return 1;
 }
-	
+
