@@ -199,7 +199,7 @@ int main(int argc, char* argv[])
 		//in the child process
 		if (argc == 3) {
 			ptrace(PTRACE_TRACEME, 0, 0, 0);
-			execlp(argv[1], argv[2]);
+			execlp(argv[1], argv[2], NULL);
 		} else {
 			ptrace(PTRACE_TRACEME, 0, 0, 0);
 			execvp(argv[1], NULL);
