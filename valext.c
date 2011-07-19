@@ -13,30 +13,55 @@
 #define PAGESHIFT 12
 #define MEMBLOCK 512
 
-struct blocklist {
-	uint64_t address;
-	struct blocklist *nextblock;
-};
+struct blockchain {
+	int size;
+	uint64t* head;
+	uint64t* tail;
+}
+
+uint64t* blockalloc(int size)
+{	
+	buf = calloc(size, sizeof(uint64t));
+	return buf;
+}
+
+struct blockchain *newchain(int size)
+{
+	struct blockchain *chain = NULL;
+	chain = malloc(sizeof(blockchain));
+	if (!chain)
+		return NULL;
+	chain->head = blockalloc(size);
+	if (chain->head == NULL) {
+		free(chain);
+		return NULL;
+	}
+	chain->size = size;
+	return chain;
+}
 
 /* recursively free the list */
-void cleanblocklist(struct blocklist *bl)
+void cleanchain(struct blockchain *chain)
 {
-	struct blocklist *nextblock;
-	if (bl == NULL)
+	if (chain == NULL)
 		return;
-	nextblock = bl->nextblock;
-	free(bl);
-	cleanblocklist(nextblock);
+	struct blockchain *head = chain;
+	if (chain->tail)
+		cleanchain(chain->tail);
+	free(head);
+	head = NULL;
+	free(chain);
+	chain = NULL;
+	return;
 }
 
 /* set up a list */
-struct blocklist* getnextblock(struct blocklist** lastblock,
-	struct blocklist** header, char* buf)
+struct blocklist* getnextblock(struct blockchain** chain,
+	struct blockchain** header, char* buf)
 {
-	int match;
+	int match, t = 0;
 	uint64_t startaddr;
 	uint64_t endaddr;
-	struct blocklist* block;
 	uint64_t i;
 	const char* pattern;
 	regex_t reg;
@@ -44,37 +69,44 @@ struct blocklist* getnextblock(struct blocklist** lastblock,
 
 	pattern = "^([0-9a-f]+)-([0-9a-f]+)";
 	if (regcomp(&reg, pattern, REG_EXTENDED) != 0)
-		return *lastblock;
+		goto ret;
 	match = regexec(&reg, buf, (size_t)3, addresses, 0);
 	if (match == REG_NOMATCH || match == REG_ESPACE)
-		return *lastblock;
+		goto cleanup;
 	startaddr = strtoul(&buf[addresses[1].rm_so], NULL, 16) >> PAGESHIFT;
 	endaddr = strtoul(&buf[addresses[2].rm_so], NULL, 16) >> PAGESHIFT;
+	if (chain == NULL) {
+		chain = newchain(MEMBLOCK);
+		if (!chain)
+			goto cleanup;
+		*header = chain;
+	}
 	for (i = startaddr; i < endaddr; i++)
 	{
-		block = malloc(sizeof (struct blocklist));
-		block->address = i;
-		block->nextblock = NULL;
-		if (*lastblock == NULL){
-			*lastblock = block;
-			*header = block;
-		} else {
-			(*lastblock)->nextblock = block;
-			*lastblock = block;
+		if (t >=  MEMBLOCK) {
+			struct blockchain *nxtchain = newchain(MEMBLOCK);
+			if (!nxtchain)
+				goto cleanup;
+			*chain->tail = nxtchain;
+			*chain = nxtchain;
+			t = 0;
 		}
-	}	
+		(*chain)[t] = i;
+		t++;
+	}
+cleanup:
 	regfree(&reg);
-	return *lastblock;
+ret:
+	return *chain;
 } 
 
 /* query /proc filesystem */
 struct blocklist* getblocks(char* pid)
 {
 	FILE *ret;
-	struct blocklist *head = NULL;
-	struct blocklist *lastblock = NULL;
+	struct blockchain *chain = NULL;
+	struct blockchain *header = NULL;
 	char buf[MEMBLOCK];
-	int i;
 	/* open /proc/pid/maps */
 	char st1[MEMBLOCK] = "/proc/";
 	strcat(st1, pid);
@@ -85,29 +117,31 @@ struct blocklist* getblocks(char* pid)
 		printf("Could not open %s\n", st1);
 		goto ret;
 	}
-	i = 0;
 	while (!feof(ret)){
 		fgets(buf, MEMBLOCK, ret);
-		lastblock = getnextblock(&lastblock, &head, buf);
-		if (!lastblock)
+		chain = getnextblock(&chain, &header, buf);
+		if (!chain)
 			goto close;
-		i++;
 	}
 close:
 	fclose(ret); 
 ret:
-	return head;
+	return header;
 }
 
 /* now read the status of each page */
-int getblockstatus(char* pid, struct blocklist *blocks, FILE* xmlout, int cnt)
+int getblockstatus(char* pid, struct blockchain *chain,
+	FILE* xmlout, int size, int cnt)
 {
 	FILE *ret;
-	int fd;
+	int fd, i = 0;
 	int presentcnt = 0;
 	int swappedcnt = 0;
 	int notpresentcnt = 0;
 	char *buf;
+	uint64_t swapped = 0x4000000000000000;
+	uint64_t present = 0x8000000000000000;
+	uint64_t pfnmask = 0x007fffffffffffff;
 	char traceline[MEMBLOCK];
 	/* open /proc/pid/pagemap */
 	char st1[MEMBLOCK] = "/proc/";
@@ -129,14 +163,11 @@ int getblockstatus(char* pid, struct blocklist *blocks, FILE* xmlout, int cnt)
 		printf("Could not allocate memory\n");
 		goto clean;
 	}
-	while (blocks) {
-		uint64_t swapped = 0x4000000000000000;
-		uint64_t present = 0x8000000000000000;
-		uint64_t pfnmask = 0x007fffffffffffff;
+	while (chain && chain->head[i]) {
 		uint64_t *pgstatus;
-		int64_t lres = lseek(fd, blocks->address << 3, SEEK_SET);
+		int64_t lres = lseek(fd, chain->head[i] << 3, SEEK_SET);
 		if (lres == -1) {
-			printf("Could not seek to %llX\n", blocks->address);
+			printf("Could not seek to %llX\n", chain->head[i]);
 			goto freebuf;
 		}
 		read(fd, buf, 8);
@@ -150,7 +181,11 @@ int getblockstatus(char* pid, struct blocklist *blocks, FILE* xmlout, int cnt)
 			//page is mapped but unused
 			notpresentcnt++;		
 		}
-		blocks = blocks->nextblock;
+		i++;
+		if (i >= size){
+			chain = chain->tail;
+			i = 0;
+		}
 	}
 	sprintf(traceline,
 		"<trace steps=\"%u\" present=\"%u\" swapped=\"%u\"/>\n",
@@ -169,7 +204,7 @@ ret:
 void getWSS(pid_t forked, FILE* xmlout)
 {
 	int i = 0, status;
-	struct blocklist *blocks;
+	struct blockchain *chain = NULL;
 	/*create a string representation of pid */
 	char pid[MEMBLOCK];
 	sprintf(pid, "%u", forked);
@@ -180,10 +215,10 @@ void getWSS(pid_t forked, FILE* xmlout)
 		ptrace(PTRACE_SINGLESTEP, forked, 0, 0);
 		if (WIFEXITED(status))
 			break;
-		blocks = getblocks(pid);
-		if (blocks)
-			getblockstatus(pid, blocks, xmlout, i++);
-		cleanblocklist(blocks);
+		chain = getblocks(pid);
+		if (chain)
+			getblockstatus(pid, chain, xmlout, MEMBLOCK, i++);
+		cleanchain(chain);
 	}
 }
 
