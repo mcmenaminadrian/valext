@@ -15,20 +15,20 @@
 
 struct blockchain {
 	int size;
-	uint64t* head;
-	uint64t* tail;
-}
+	uint64_t *head;
+	struct blockchain *tail;
+};
 
-uint64t* blockalloc(int size)
+uint64_t* blockalloc(int size)
 {	
-	buf = calloc(size, sizeof(uint64t));
+	uint64_t *buf = calloc(size, sizeof(uint64_t));
 	return buf;
 }
 
 struct blockchain *newchain(int size)
 {
 	struct blockchain *chain = NULL;
-	chain = malloc(sizeof(blockchain));
+	chain = malloc(sizeof(struct blockchain));
 	if (!chain)
 		return NULL;
 	chain->head = blockalloc(size);
@@ -56,7 +56,7 @@ void cleanchain(struct blockchain *chain)
 }
 
 /* set up a list */
-struct blocklist* getnextblock(struct blockchain** chain,
+struct blockchain* getnextblock(struct blockchain** chain,
 	struct blockchain** header, char* buf)
 {
 	int match, t = 0;
@@ -76,10 +76,10 @@ struct blocklist* getnextblock(struct blockchain** chain,
 	startaddr = strtoul(&buf[addresses[1].rm_so], NULL, 16) >> PAGESHIFT;
 	endaddr = strtoul(&buf[addresses[2].rm_so], NULL, 16) >> PAGESHIFT;
 	if (chain == NULL) {
-		chain = newchain(MEMBLOCK);
+		*chain = newchain(MEMBLOCK);
 		if (!chain)
 			goto cleanup;
-		*header = chain;
+		*header = *chain;
 	}
 	for (i = startaddr; i < endaddr; i++)
 	{
@@ -87,11 +87,11 @@ struct blocklist* getnextblock(struct blockchain** chain,
 			struct blockchain *nxtchain = newchain(MEMBLOCK);
 			if (!nxtchain)
 				goto cleanup;
-			*chain->tail = nxtchain;
+			(*chain)->tail = nxtchain;
 			*chain = nxtchain;
 			t = 0;
 		}
-		(*chain)[t] = i;
+		(*chain)->head[t] = i;
 		t++;
 	}
 cleanup:
@@ -101,7 +101,7 @@ ret:
 } 
 
 /* query /proc filesystem */
-struct blocklist* getblocks(char* pid)
+struct blockchain* getblocks(char* pid)
 {
 	FILE *ret;
 	struct blockchain *chain = NULL;
