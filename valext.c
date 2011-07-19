@@ -28,7 +28,7 @@ uint64_t* blockalloc(int size)
 struct blockchain *newchain(int size)
 {
 	struct blockchain *chain = NULL;
-	chain = malloc(sizeof(struct blockchain));
+	chain = calloc(1, sizeof(struct blockchain));
 	if (!chain)
 		return NULL;
 	chain->head = blockalloc(size);
@@ -43,15 +43,11 @@ struct blockchain *newchain(int size)
 /* recursively free the list */
 void cleanchain(struct blockchain *chain)
 {
-	if (chain == NULL)
+	if (!chain)
 		return;
-	struct blockchain *head = chain;
-	if (chain->tail)
-		cleanchain(chain->tail);
-	free(head);
-	head = NULL;
+	cleanchain(chain->tail);
+	free(chain->head);
 	free(chain);
-	chain = NULL;
 	return;
 }
 
@@ -75,12 +71,12 @@ struct blockchain* getnextblock(struct blockchain** chain,
 		goto cleanup;
 	startaddr = strtoul(&buf[addresses[1].rm_so], NULL, 16) >> PAGESHIFT;
 	endaddr = strtoul(&buf[addresses[2].rm_so], NULL, 16) >> PAGESHIFT;
-	if (chain == NULL) {
+	if (*chain == NULL) {
 		*chain = newchain(MEMBLOCK);
-		if (!chain)
+		if (*chain == NULL)
 			goto cleanup;
 		*header = *chain;
-	}
+	} 
 	for (i = startaddr; i < endaddr; i++)
 	{
 		if (t >=  MEMBLOCK) {
@@ -91,7 +87,7 @@ struct blockchain* getnextblock(struct blockchain** chain,
 			*chain = nxtchain;
 			t = 0;
 		}
-		(*chain)->head[t] = i;
+		(*chain)->head[t]  = i;
 		t++;
 	}
 cleanup:
