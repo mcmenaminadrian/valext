@@ -12,6 +12,7 @@
 
 #define PAGESHIFT 12
 #define MEMBLOCK 512
+#define CHAINSIZE 170
 
 struct blockchain {
 	int size;
@@ -19,7 +20,7 @@ struct blockchain {
 	struct blockchain *tail;
 };
 
-#define CHAINSIZE = 4096/sizeof(struct blockchain)
+//#define CHAINSIZE 4096/sizeof(struct blockchain)
 
 uint64_t* blockalloc(int size)
 {	
@@ -54,7 +55,7 @@ void cleanchain(struct blockchain *chain)
 }
 
 /* set up a list */
-bool getnextblock(struct blockchain** header, char* buf, int size) 
+int getnextblock(struct blockchain **header, char *buf, int size) 
 {
 	int match, t = 0;
 	uint64_t startaddr;
@@ -62,7 +63,7 @@ bool getnextblock(struct blockchain** header, char* buf, int size)
 	uint64_t i;
 	struct blockchain* chain = *header;
 	const char* pattern;
-	bool retval = false;
+	int retval = 0;
 	regex_t reg;
 	regmatch_t addresses[3];
 
@@ -74,7 +75,6 @@ bool getnextblock(struct blockchain** header, char* buf, int size)
 		goto cleanup;
 	startaddr = strtoul(&buf[addresses[1].rm_so], NULL, 16) >> PAGESHIFT;
 	endaddr = strtoul(&buf[addresses[2].rm_so], NULL, 16) >> PAGESHIFT;
-	} 
 	for (i = startaddr; i < endaddr; i++)
 	{
 		chain->head[t]  = i;
@@ -92,7 +92,8 @@ bool getnextblock(struct blockchain** header, char* buf, int size)
 		}
 		chain->head[t] = 0; //guard
 	}
-	retval = true;
+	retval = 1;
+
 cleanup:
 	regfree(&reg);
 ret:
@@ -103,7 +104,6 @@ ret:
 void getblocks(char* pid, struct blockchain** header, int size)
 {
 	FILE *ret;
-	struct blockchain *chain = *header
 	char buf[MEMBLOCK];
 	/* open /proc/pid/maps */
 	char st1[MEMBLOCK] = "/proc/";
@@ -117,7 +117,7 @@ void getblocks(char* pid, struct blockchain** header, int size)
 	}
 	while (!feof(ret)){
 		fgets(buf, MEMBLOCK, ret);
-		if (!getnextblock(&chain, &header, buf, size)) {
+		if (!getnextblock(header, buf, size)) {
 			goto close;
 		}
 	}
