@@ -55,13 +55,13 @@ void cleanchain(struct blockchain *chain)
 }
 
 /* set up a list */
-int getnextblock(struct blockchain **header, char *buf, int size) 
+int getnextblock(struct blockchain *header, char *buf, int size, int *t)
 {
-	int match, t = 0;
+	int match;
 	uint64_t startaddr;
 	uint64_t endaddr;
 	uint64_t i;
-	struct blockchain* chain = *header;
+	struct blockchain* chain = header;
 	const char* pattern;
 	int retval = 0;
 	regex_t reg;
@@ -77,9 +77,9 @@ int getnextblock(struct blockchain **header, char *buf, int size)
 	endaddr = strtoul(&buf[addresses[2].rm_so], NULL, 16) >> PAGESHIFT;
 	for (i = startaddr; i < endaddr; i++)
 	{
-		chain->head[t]  = i;
-		t++;
-		if (t == size) {
+		chain->head[*t]  = i;
+		(*t)++;
+		if (*t == size) {
 			if (chain->tail == 0) {
 				struct blockchain *nxtchain = 
 					newchain(size);
@@ -88,9 +88,9 @@ int getnextblock(struct blockchain **header, char *buf, int size)
 				chain->tail = nxtchain;
 			}
 			chain = chain->tail;
-			t = 0;
+			*t = 0;
 		}
-		chain->head[t] = 0; //guard
+		chain->head[*t] = 0; //guard
 	}
 	retval = 1;
 
@@ -101,9 +101,10 @@ ret:
 } 
 
 /* query /proc filesystem */
-void getblocks(char* pid, struct blockchain** header, int size)
+void getblocks(char* pid, struct blockchain* header, int size)
 {
 	FILE *ret;
+	int t = 0;
 	char buf[MEMBLOCK];
 	/* open /proc/pid/maps */
 	char st1[MEMBLOCK] = "/proc/";
@@ -117,7 +118,7 @@ void getblocks(char* pid, struct blockchain** header, int size)
 	}
 	while (!feof(ret)){
 		fgets(buf, MEMBLOCK, ret);
-		if (!getnextblock(header, buf, size)) {
+		if (!getnextblock(header, buf, size, &t)) {
 			goto close;
 		}
 	}
@@ -129,7 +130,7 @@ ret:
 
 /* now read the status of each page */
 int getblockstatus(char* pid, struct blockchain *chain,
-	FILE* xmlout, int size, int cnt)
+	FILE* xmlout, int cnt, int size)
 {
 	FILE *ret;
 	int fd, i = 0;
@@ -170,7 +171,6 @@ int getblockstatus(char* pid, struct blockchain *chain,
 		}
 		read(fd, buf, 8);
 		pgstatus = (uint64_t *)buf;
-
 		if (*pgstatus & swapped) {
 			swappedcnt++;
 		} else if (*pgstatus & present) {
@@ -213,7 +213,7 @@ void getWSS(pid_t forked, FILE* xmlout, int size)
 		ptrace(PTRACE_SINGLESTEP, forked, 0, 0);
 		if (WIFEXITED(status))
 			break;
-		getblocks(pid, &header, size);
+		getblocks(pid, header, size);
 		if (header->head[0])
 			getblockstatus(pid, header, xmlout, i++, size);
 	}
