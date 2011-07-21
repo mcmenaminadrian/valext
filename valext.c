@@ -19,6 +19,8 @@ struct blockchain {
 	struct blockchain *tail;
 };
 
+#define CHAINSIZE = 4096/sizeof(struct blockchain)
+
 uint64_t* blockalloc(int size)
 {	
 	uint64_t *buf = calloc(size, sizeof(uint64_t));
@@ -52,14 +54,15 @@ void cleanchain(struct blockchain *chain)
 }
 
 /* set up a list */
-struct blockchain* getnextblock(struct blockchain** chain,
-	struct blockchain** header, char* buf)
+bool getnextblock(struct blockchain** header, char* buf, int size) 
 {
 	int match, t = 0;
 	uint64_t startaddr;
 	uint64_t endaddr;
 	uint64_t i;
+	struct blockchain* chain = *header;
 	const char* pattern;
+	bool retval = false;
 	regex_t reg;
 	regmatch_t addresses[3];
 
@@ -71,37 +74,36 @@ struct blockchain* getnextblock(struct blockchain** chain,
 		goto cleanup;
 	startaddr = strtoul(&buf[addresses[1].rm_so], NULL, 16) >> PAGESHIFT;
 	endaddr = strtoul(&buf[addresses[2].rm_so], NULL, 16) >> PAGESHIFT;
-	if (*chain == NULL) {
-		*chain = newchain(MEMBLOCK);
-		if (*chain == NULL)
-			goto cleanup;
-		*header = *chain;
 	} 
 	for (i = startaddr; i < endaddr; i++)
 	{
-		if (t >=  MEMBLOCK) {
-			struct blockchain *nxtchain = newchain(MEMBLOCK);
-			if (!nxtchain)
-				goto cleanup;
-			(*chain)->tail = nxtchain;
-			*chain = nxtchain;
+		chain->head[t]  = i;
+		t++;
+		if (t == size) {
+			if (chain->tail == 0) {
+				struct blockchain *nxtchain = 
+					newchain(size);
+				if (!nxtchain)
+					goto cleanup;
+				chain->tail = nxtchain;
+			}
+			chain = chain->tail;
 			t = 0;
 		}
-		(*chain)->head[t]  = i;
-		t++;
+		chain->head[t] = 0; //guard
 	}
+	retval = true;
 cleanup:
 	regfree(&reg);
 ret:
-	return *chain;
+	return retval;
 } 
 
 /* query /proc filesystem */
-struct blockchain* getblocks(char* pid)
+void getblocks(char* pid, struct blockchain** header, int size)
 {
 	FILE *ret;
-	struct blockchain *chain = NULL;
-	struct blockchain *header = NULL;
+	struct blockchain *chain = *header
 	char buf[MEMBLOCK];
 	/* open /proc/pid/maps */
 	char st1[MEMBLOCK] = "/proc/";
@@ -115,14 +117,14 @@ struct blockchain* getblocks(char* pid)
 	}
 	while (!feof(ret)){
 		fgets(buf, MEMBLOCK, ret);
-		chain = getnextblock(&chain, &header, buf);
-		if (!chain)
+		if (!getnextblock(&chain, &header, buf, size)) {
 			goto close;
+		}
 	}
 close:
 	fclose(ret); 
 ret:
-	return header;
+	return;
 }
 
 /* now read the status of each page */
@@ -197,10 +199,10 @@ ret:
 }
 
 /* run the child */
-void getWSS(pid_t forked, FILE* xmlout)
+void getWSS(pid_t forked, FILE* xmlout, int size)
 {
 	int i = 0, status;
-	struct blockchain *chain = NULL;
+	struct blockchain *header = newchain(size);
 	/*create a string representation of pid */
 	char pid[MEMBLOCK];
 	sprintf(pid, "%u", forked);
@@ -211,11 +213,11 @@ void getWSS(pid_t forked, FILE* xmlout)
 		ptrace(PTRACE_SINGLESTEP, forked, 0, 0);
 		if (WIFEXITED(status))
 			break;
-		chain = getblocks(pid);
-		if (chain)
-			getblockstatus(pid, chain, xmlout, MEMBLOCK, i++);
-		cleanchain(chain);
+		getblocks(pid, &header, size);
+		if (header->head[0])
+			getblockstatus(pid, header, xmlout, i++, size);
 	}
+	cleanchain(header);
 }
 
 int main(int argc, char* argv[])
@@ -258,7 +260,7 @@ int main(int argc, char* argv[])
 	fputs("<!ATTLIST trace swapped CDATA #REQUIRED>\n", outXML);
 	fputs("]>\n", outXML);
 	fputs("<ptracexml>\n", outXML);
-	getWSS(forker, outXML);
+	getWSS(forker, outXML, CHAINSIZE);
 	fputs("</ptracexml>\n", outXML);
 	fclose(outXML);
 	return 1;
