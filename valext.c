@@ -176,7 +176,7 @@ int getblockstatus(char* pid, struct blockchain *chain,
 		} else if (*pgstatus & present) {
 			presentcnt++;
 		} else {
-			//page is mapped but not in page table
+			//page is present but not in page table
 			notpresentcnt++;		
 		}
 		i++;
@@ -186,7 +186,7 @@ int getblockstatus(char* pid, struct blockchain *chain,
 		}
 	}
 	sprintf(traceline,
-	"<trace steps=\"%u\" present=\"%u\" swapped=\"%u\" maponly=\"%u\"/>\n",
+	"<trace steps=\"%u\" present=\"%u\" swapped=\"%u\" presonly=\"%u\"/>\n",
 	cnt, presentcnt, swappedcnt, notpresentcnt);
 	fputs(traceline, xmlout);
 
@@ -258,7 +258,7 @@ int main(int argc, char* argv[])
 	fputs("<!ATTLIST trace step CDATA #REQUIRED>\n", outXML);
 	fputs("<!ATTLIST trace present CDATA #REQUIRED>\n", outXML);
 	fputs("<!ATTLIST trace swapped CDATA #REQUIRED>\n", outXML);
-	fputs("<!ATTLIST trace maponly CDATA #REQUIRED>\n", outXML);
+	fputs("<!ATTLIST trace presonly CDATA #REQUIRED>\n", outXML);
 	fputs("]>\n", outXML);
 	fputs("<ptracexml>\n", outXML);
 	getWSS(forker, outXML, CHAINSIZE);
