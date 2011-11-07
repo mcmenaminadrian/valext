@@ -253,12 +253,15 @@ int main(int argc, char* argv[])
 	}
 	fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n", outXML);
 	fputs("<!DOCTYPE ptracexml [\n", outXML);
-	fputs("<!ELEMENT ptracexml (trace)*>\n", outXML);
+	fputs("<!ELEMENT ptracexml (trace,faults?)*>\n", outXML);
 	fputs("<!ELEMENT trace EMPTY>\n", outXML);
 	fputs("<!ATTLIST trace step CDATA #REQUIRED>\n", outXML);
 	fputs("<!ATTLIST trace present CDATA #REQUIRED>\n", outXML);
 	fputs("<!ATTLIST trace swapped CDATA #REQUIRED>\n", outXML);
 	fputs("<!ATTLIST trace presonly CDATA #REQUIRED>\n", outXML);
+	fputs("<!ELEMENT faults EMPTY>\n", outXML);
+	fputs("<!ATTLIST faults soft CDATA #REQUIRED>\n", outXML);
+	fputs("<!ATTLIST faults hard CDATA #REQUIRED>\n", outXML);
 	fputs("]>\n", outXML);
 	fputs("<ptracexml>\n", outXML);
 	getWSS(forker, outXML, CHAINSIZE);
