@@ -128,6 +128,39 @@ ret:
 	return;
 }
 
+/* collect and write out fault statistics */
+void getfaultstats(char* pid, FILE* xmlout)
+{
+	FILE *ret;
+	int fd;
+	char * buf;
+	char* stats[MEMBLOCK] = "/proc/";
+	strcat(stats, pid);
+	strcat(stats, "/stat");
+	ret = fopen(st1, "r");
+	if (ret == NULL) {
+		printf("Could not open %s\n", stats);
+		return;
+	}
+
+	fd = fileno(ret);
+	if (fd == -1) {
+		printf("Could not get fileno for %s\n", stats);
+		goto closefile;
+	}
+
+	buf = malloc(MEMBLOCK);
+	if (!buf) {
+		printf("Could not allocate memory to read %s\n", stats);
+		goto closefile;
+	}
+
+cleanmem:
+	free(buf);
+closefile:
+	fclose(ret);
+}
+
 /* now read the status of each page */
 int getblockstatus(char* pid, struct blockchain *chain,
 	FILE* xmlout, int cnt, int size)
@@ -189,6 +222,8 @@ int getblockstatus(char* pid, struct blockchain *chain,
 	"<trace steps=\"%u\" present=\"%u\" swapped=\"%u\" presonly=\"%u\"/>\n",
 	cnt, presentcnt, swappedcnt, notpresentcnt);
 	fputs(traceline, xmlout);
+
+	addfaultstats(pid, xmlout);
 
 freebuf:
 	free(buf);
