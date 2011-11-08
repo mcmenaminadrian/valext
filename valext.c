@@ -132,9 +132,19 @@ ret:
 void getfaultstats(char* pid, FILE* xmlout)
 {
 	FILE *ret;
-	int fd;
+	int fd, match;
 	char * buf;
+	regex_t reg;
+	regmatch_t statstuff[44];
+	const char * pattern = "
 	char* stats[MEMBLOCK] = "/proc/";
+
+	pattern = "\S*";
+	if (regcomp(&reg, pattern, REG_EXTENDED) != 0) {
+		printf("RegEx compile failed\n");
+		return;
+	}
+
 	strcat(stats, pid);
 	strcat(stats, "/stat");
 	ret = fopen(st1, "r");
@@ -154,7 +164,19 @@ void getfaultstats(char* pid, FILE* xmlout)
 		printf("Could not allocate memory to read %s\n", stats);
 		goto closefile;
 	}
+	if (!fgets(buf, MEMBLOCK, ret)) {
+		printf("Could not read from %s\n", stats);
+		goto cleanmem;
+	}
+	
+	match = regexec(&reg, buf, (size_t)44, statstuff, 0);
+	if (match == REG_NOMATCH || match == REG_ESPACE)
+		goto cleanreg;
 
+	
+
+cleanreg:
+	regfree(&reg);
 cleanmem:
 	free(buf);
 closefile:
@@ -218,12 +240,14 @@ int getblockstatus(char* pid, struct blockchain *chain,
 			i = 0;
 		}
 	}
+	//write out the xml
 	sprintf(traceline,
-	"<trace steps=\"%u\" present=\"%u\" swapped=\"%u\" presonly=\"%u\"/>\n",
+	"<trace steps=\"%u\" present=\"%u\" swapped=\"%u\" presonly=\"%u\">\n",
 	cnt, presentcnt, swappedcnt, notpresentcnt);
 	fputs(traceline, xmlout);
-
 	addfaultstats(pid, xmlout);
+	sprint(traceline, "</trace>\n");
+	fputs(traceline, xmlout);	
 
 freebuf:
 	free(buf);
@@ -288,8 +312,8 @@ int main(int argc, char* argv[])
 	}
 	fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n", outXML);
 	fputs("<!DOCTYPE ptracexml [\n", outXML);
-	fputs("<!ELEMENT ptracexml (trace,faults?)*>\n", outXML);
-	fputs("<!ELEMENT trace EMPTY>\n", outXML);
+	fputs("<!ELEMENT ptracexml (trace)*>\n", outXML);
+	fputs("<!ELEMENT trace (faults)?>\n", outXML);
 	fputs("<!ATTLIST trace step CDATA #REQUIRED>\n", outXML);
 	fputs("<!ATTLIST trace present CDATA #REQUIRED>\n", outXML);
 	fputs("<!ATTLIST trace swapped CDATA #REQUIRED>\n", outXML);
