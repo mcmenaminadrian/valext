@@ -136,7 +136,7 @@ void getfaultstats(char* pid, FILE* xmlout)
 	char * buf;
 	regex_t reg;
 	regmatch_t statstuff[44];
-	const char * pattern = "
+	const char * pattern = "\S*";
 	char* stats[MEMBLOCK] = "/proc/";
 
 	pattern = "\S*";
