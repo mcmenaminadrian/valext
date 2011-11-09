@@ -137,7 +137,11 @@ void getfaultstats(char* pid, FILE* xmlout)
 	regex_t reg;
 	regmatch_t statstuff[44];
 	const char * pattern = "\S*";
-	char* stats[MEMBLOCK] = "/proc/";
+	char stats[MEMBLOCK] = "/proc/";
+	char faultline[MEMBLOCK];
+	char soft[0x20];
+	char hard[0x20];
+	int softlen, hardlen;
 
 	pattern = "\S*";
 	if (regcomp(&reg, pattern, REG_EXTENDED) != 0) {
@@ -147,7 +151,7 @@ void getfaultstats(char* pid, FILE* xmlout)
 
 	strcat(stats, pid);
 	strcat(stats, "/stat");
-	ret = fopen(st1, "r");
+	ret = fopen(stats, "r");
 	if (ret == NULL) {
 		printf("Could not open %s\n", stats);
 		return;
@@ -173,7 +177,17 @@ void getfaultstats(char* pid, FILE* xmlout)
 	if (match == REG_NOMATCH || match == REG_ESPACE)
 		goto cleanreg;
 
-	
+
+	softlen = 1 + statstuff[9].rm_eo - statstuff[9].rm_so;
+	hardlen = 1 + statstuff[11].rm_eo - statstuff[11].rm_so;
+	if ((softlen >= 0x20)||(hardlen >= 0x20))
+		goto cleanreg;
+	strncpy(soft, buf + statstuff[9].rm_so, softlen);
+	soft[softlen] = '\0';
+	strncpy(hard, buf + statstuff[11].rm_so, hardlen);
+	hard[hardlen] = '\0';
+	sprintf(faultline, "<faults soft=\"%s\" hard=\"%s\" />\n", soft, hard);
+	fputs(faultline, xmlout);
 
 cleanreg:
 	regfree(&reg);
@@ -245,8 +259,8 @@ int getblockstatus(char* pid, struct blockchain *chain,
 	"<trace steps=\"%u\" present=\"%u\" swapped=\"%u\" presonly=\"%u\">\n",
 	cnt, presentcnt, swappedcnt, notpresentcnt);
 	fputs(traceline, xmlout);
-	addfaultstats(pid, xmlout);
-	sprint(traceline, "</trace>\n");
+	getfaultstats(pid, xmlout);
+	sprintf(traceline, "</trace>\n");
 	fputs(traceline, xmlout);	
 
 freebuf:
