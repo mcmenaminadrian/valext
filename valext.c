@@ -135,13 +135,16 @@ void getfaultstats(char* pid, FILE* xmlout)
 	int fd, match;
 	char * buf;
 	regex_t reg;
-	regmatch_t statstuff[45];
-	const char * pattern = "((\\w)+)";
+	regmatch_t statstuff[13];
+	char pattern[MEMBLOCK];
+
 	char stats[MEMBLOCK] = "/proc/";
 	char faultline[MEMBLOCK];
 	char soft[0x20];
 	char hard[0x20];
 	int softlen, hardlen;
+	strcpy(pattern, "^(\\S+)\\s(\\S+)\\s(\\S+)\\s(\\S+)\\s(\\S+)\\s(\\S+)");
+	strcat(pattern,	"\\s(\\S+)\\s(\\S+)\\s(\\S+)\\s(\\S+)\\s(\\S+)\\s(\\S+)");
 
 	if (regcomp(&reg, pattern, REG_EXTENDED) != 0) {
 		printf("RegEx compile failed\n");
@@ -172,22 +175,21 @@ void getfaultstats(char* pid, FILE* xmlout)
 		goto cleanmem;
 	}
 	
-	match = regexec(&reg, buf, (size_t)44, statstuff, 0);
+	match = regexec(&reg, buf, (size_t)13, statstuff, 0);
 	if (match == REG_NOMATCH || match == REG_ESPACE)
 	{	printf("No RegEx Match\n");
 		goto cleanreg;
 	}
-	printf("Match was %d\n", match);
 
-	softlen = 1 + statstuff[10].rm_eo - statstuff[10].rm_so;
-	hardlen = 1 + statstuff[12].rm_eo - statstuff[12].rm_so;
+	softlen = statstuff[10].rm_eo - statstuff[10].rm_so;
+	hardlen = statstuff[12].rm_eo - statstuff[12].rm_so;
 	if ((softlen >= 0x20)||(hardlen >= 0x20))
 		goto cleanreg;
 	strncpy(soft, buf + statstuff[10].rm_so, softlen);
 	soft[softlen] = '\0';
 	strncpy(hard, buf + statstuff[12].rm_so, hardlen);
 	hard[hardlen] = '\0';
-	sprintf(faultline, "<faults soft=\"%d\" hard=\"%d\" />\n", soft, hard);
+	sprintf(faultline, "<faults soft=\"%s\" hard=\"%s\" />\n", soft, hard);
 	fputs(faultline, xmlout);
 
 cleanreg:
