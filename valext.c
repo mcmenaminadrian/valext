@@ -286,9 +286,9 @@ void getWSS(pid_t forked, FILE* xmlout, int size)
 	while(1)
 	{
 		wait(&status);
-		ptrace(PTRACE_SINGLESTEP, forked, 0, 0);
 		if (WIFEXITED(status))
 			break;
+		ptrace(PTRACE_SINGLESTEP, forked, 0, 0);
 		getblocks(pid, header, size);
 		if (header->head[0])
 			getblockstatus(pid, header, xmlout, i++, size);
@@ -306,13 +306,8 @@ int main(int argc, char* argv[])
 	pid_t forker = fork();
 	if (forker == 0) {
 		//in the child process
-		if (argc == 3) {
-			ptrace(PTRACE_TRACEME, 0, 0, 0);
-			execlp(argv[1], argv[2], NULL);
-		} else {
-			ptrace(PTRACE_TRACEME, 0, 0, 0);
-			execvp(argv[1], NULL);
-		}
+		ptrace(PTRACE_TRACEME, 0, 0, 0);
+		execlp(argv[1], (const char *)&argv[2]);
 		return 0;
 	}
 	//in the original process
