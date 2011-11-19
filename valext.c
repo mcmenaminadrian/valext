@@ -307,7 +307,7 @@ int main(int argc, char* argv[])
 	if (forker == 0) {
 		//in the child process
 		ptrace(PTRACE_TRACEME, 0, 0, 0);
-		execlp(argv[1], (const char *)&argv[2]);
+		execvp(argv[1], (char * const *)&argv[2]);
 		return 0;
 	}
 	//in the original process
